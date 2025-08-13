@@ -7,7 +7,7 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Yaxshi Link - Admin Panel",
   description: "Admin panel for Yaxshi Link container return service",
-  generator: "v0.app",
+  generator: "Jam",
 }
 
 export default function RootLayout({
