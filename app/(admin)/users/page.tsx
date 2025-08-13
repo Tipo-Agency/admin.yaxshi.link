@@ -313,13 +313,13 @@ export default function UsersPage() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarImage
-                            src={user.avatar || "/placeholder.svg"}
+                            src={user.avatar ? `https://api.yaxshi.link${user.avatar}` : "/placeholder.svg"}
                             alt={`${user.first_name} ${user.last_name}`}
                           />
-                          <AvatarFallback>
+                          {/* <AvatarFallback>
                             {user.first_name?.[0]}
                             {user.last_name?.[0]}
-                          </AvatarFallback>
+                          </AvatarFallback> */}
                         </Avatar>
                         <div>
                           <div className="font-medium">
