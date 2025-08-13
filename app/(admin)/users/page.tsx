@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,98 +16,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Filter, MoreHorizontal, UserPlus, Download, Eye, Edit, Ban, CheckCircle } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { Search, Filter, MoreHorizontal, UserPlus, Download, Eye, Edit, Ban, CheckCircle, Loader2 } from "lucide-react"
 
-const mockUsers = [
-  {
-    id: "1",
-    name: "Алишер Каримов",
-    email: "alisher.karimov@email.com",
-    phone: "+998 90 123 45 67",
-    status: "active",
-    registrationDate: "2024-01-15",
-    balance: 125000, // в сумах
-    bottlesSubmitted: 245,
-    aluminumBottlesSubmitted: 89,
-    totalPayout: 450000, // в сумах
-    totalContainersSubmitted: 334,
-    points: 1250,
-    totalRewards: 12,
-    location: "Ташкент",
-    avatar: "/placeholder.svg?height=32&width=32",
-  },
-  {
-    id: "2",
-    name: "Фатима Рахимова",
-    email: "fatima.rahimova@email.com",
-    phone: "+998 91 234 56 78",
-    status: "active",
-    registrationDate: "2024-01-20",
-    balance: 89000,
-    bottlesSubmitted: 189,
-    aluminumBottlesSubmitted: 67,
-    totalPayout: 320000,
-    totalContainersSubmitted: 256,
-    points: 890,
-    totalRewards: 8,
-    location: "Самарканд",
-    avatar: "/placeholder.svg?height=32&width=32",
-  },
-  {
-    id: "3",
-    name: "Дилшод Усманов",
-    email: "dilshod.usmanov@email.com",
-    phone: "+998 93 345 67 89",
-    status: "blocked",
-    registrationDate: "2024-02-01",
-    balance: 15000,
-    bottlesSubmitted: 67,
-    aluminumBottlesSubmitted: 23,
-    totalPayout: 95000,
-    totalContainersSubmitted: 90,
-    points: 150,
-    totalRewards: 3,
-    location: "Бухара",
-    avatar: "/placeholder.svg?height=32&width=32",
-  },
-  {
-    id: "4",
-    name: "Нигора Абдуллаева",
-    email: "nigora.abdullaeva@email.com",
-    phone: "+998 94 456 78 90",
-    status: "pending",
-    registrationDate: "2024-02-10",
-    balance: 34000,
-    bottlesSubmitted: 23,
-    aluminumBottlesSubmitted: 12,
-    totalPayout: 45000,
-    totalContainersSubmitted: 35,
-    points: 340,
-    totalRewards: 1,
-    location: "Андижан",
-    avatar: "/placeholder.svg?height=32&width=32",
-  },
-  {
-    id: "5",
-    name: "Шерзод Турсунов",
-    email: "sherzod.tursunov@email.com",
-    phone: "+998 95 567 89 01",
-    status: "active",
-    registrationDate: "2024-02-15",
-    balance: 78000,
-    bottlesSubmitted: 156,
-    aluminumBottlesSubmitted: 45,
-    totalPayout: 234000,
-    totalContainersSubmitted: 201,
-    points: 780,
-    totalRewards: 7,
-    location: "Фергана",
-    avatar: "/placeholder.svg?height=32&width=32",
-  },
-]
+import { usersApi } from "@/lib/api/users"
+import type { User, UsersStats } from "@/lib/api/types"
+import { ApiError } from "@/lib/api/client"
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
+const getStatusBadge = (status: string, isActive: boolean) => {
+  if (!isActive) {
+    return <Badge variant="destructive">Заблокирован</Badge>
+  }
+
+  switch (status.toLowerCase()) {
     case "active":
       return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Активный</Badge>
     case "blocked":
@@ -123,19 +44,157 @@ const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("uz-UZ").format(amount) + " сум"
 }
 
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("ru-RU")
+}
+
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [users] = useState(mockUsers)
+  const [users, setUsers] = useState<User[]>([])
+  const [stats, setStats] = useState<UsersStats>({
+    total: 0,
+    active: 0,
+    blocked: 0,
+    new_this_month: 0,
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<{ [key: number]: boolean }>({})
+  const { toast } = useToast()
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const data = await usersApi.getUsers()
+      setUsers(data.users)
+      setStats(data.stats)
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Произошла ошибка при загрузке данных"
+      setError(errorMessage)
+      console.error("Error fetching users:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const blockUser = async (userId: number) => {
+    try {
+      setActionLoading((prev) => ({ ...prev, [userId]: true }))
+
+      await usersApi.blockUser(userId)
+
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => (user.id === userId ? { ...user, is_active: false, status: "blocked" } : user)),
+      )
+
+      setStats((prevStats) => ({
+        ...prevStats,
+        active: prevStats.active - 1,
+        blocked: prevStats.blocked + 1,
+      }))
+
+      toast({
+        title: "Пользователь заблокирован",
+        description: "Пользователь успешно заблокирован",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Не удалось заблокировать пользователя"
+
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      console.error("Error blocking user:", err)
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
+  const unblockUser = async (userId: number) => {
+    try {
+      setActionLoading((prev) => ({ ...prev, [userId]: true }))
+
+      await usersApi.unblockUser(userId)
+
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => (user.id === userId ? { ...user, is_active: true, status: "active" } : user)),
+      )
+
+      setStats((prevStats) => ({
+        ...prevStats,
+        active: prevStats.active + 1,
+        blocked: prevStats.blocked - 1,
+      }))
+
+      toast({
+        title: "Пользователь разблокирован",
+        description: "Пользователь успешно разблокирован",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Не удалось разблокировать пользователя"
+
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      console.error("Error unblocking user:", err)
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
   const filteredUsers = users.filter((user) => {
+    const fullName = `${user.first_name} ${user.last_name}`.toLowerCase()
     const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      fullName.includes(searchTerm.toLowerCase()) ||
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.phone.includes(searchTerm)
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
+
+    let matchesStatus = true
+    if (statusFilter === "active") {
+      matchesStatus = user.is_active && user.status.toLowerCase() === "active"
+    } else if (statusFilter === "blocked") {
+      matchesStatus = !user.is_active || user.status.toLowerCase() === "blocked"
+    } else if (statusFilter === "pending") {
+      matchesStatus = user.status.toLowerCase() === "pending"
+    }
+
     return matchesSearch && matchesStatus
   })
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Загрузка пользователей...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex flex-col justify-center items-center h-64 space-y-4">
+          <div className="text-red-600">Ошибка загрузки данных: {error}</div>
+          <Button onClick={fetchUsers} variant="outline">
+            Попробовать снова
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -156,15 +215,14 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Всего пользователей</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2,847</div>
-            <p className="text-xs text-muted-foreground">+12% с прошлого месяца</p>
+            <div className="text-2xl font-bold">{stats.total.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">общее количество</p>
           </CardContent>
         </Card>
         <Card>
@@ -172,8 +230,10 @@ export default function UsersPage() {
             <CardTitle className="text-sm font-medium">Активные</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">2,654</div>
-            <p className="text-xs text-muted-foreground">93.2% от общего числа</p>
+            <div className="text-2xl font-bold text-green-600">{stats.active.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(1) : 0}% от общего числа
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -181,8 +241,10 @@ export default function UsersPage() {
             <CardTitle className="text-sm font-medium">Заблокированные</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">156</div>
-            <p className="text-xs text-muted-foreground">5.5% от общего числа</p>
+            <div className="text-2xl font-bold text-red-600">{stats.blocked.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.total > 0 ? ((stats.blocked / stats.total) * 100).toFixed(1) : 0}% от общего числа
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -190,13 +252,12 @@ export default function UsersPage() {
             <CardTitle className="text-sm font-medium">Новые за месяц</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">342</div>
-            <p className="text-xs text-muted-foreground">+18% к прошлому месяцу</p>
+            <div className="text-2xl font-bold text-blue-600">{stats.new_this_month.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">за текущий месяц</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters and Search */}
       <Card>
         <CardHeader>
           <CardTitle>Список пользователей</CardTitle>
@@ -208,7 +269,7 @@ export default function UsersPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Поиск по имени, email или телефону..."
+                  placeholder="Поиск по имени, username, email или телефону..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -229,7 +290,6 @@ export default function UsersPage() {
             </Select>
           </div>
 
-          {/* Users Table */}
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -252,17 +312,20 @@ export default function UsersPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                          <AvatarImage
+                            src={user.avatar || "/placeholder.svg"}
+                            alt={`${user.first_name} ${user.last_name}`}
+                          />
                           <AvatarFallback>
-                            {user.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                            {user.first_name?.[0]}
+                            {user.last_name?.[0]}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-sm text-muted-foreground">ID: #{user.id}</div>
+                          <div className="font-medium">
+                            {user.first_name} {user.last_name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">@{user.username}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -272,25 +335,25 @@ export default function UsersPage() {
                         <div className="text-muted-foreground">{user.phone}</div>
                       </div>
                     </TableCell>
-                    <TableCell>{getStatusBadge(user.status)}</TableCell>
+                    <TableCell>{getStatusBadge(user.status, user.is_active)}</TableCell>
                     <TableCell>
                       <div className="font-medium text-green-600">{formatCurrency(user.balance)}</div>
                       <div className="text-sm text-muted-foreground">текущий баланс</div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{user.bottlesSubmitted}</div>
+                      <div className="font-medium">{user.bottle_count}</div>
                       <div className="text-sm text-muted-foreground">штук</div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{user.aluminumBottlesSubmitted}</div>
+                      <div className="font-medium">{user.aluminum_bottle_count}</div>
                       <div className="text-sm text-muted-foreground">штук</div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{user.totalContainersSubmitted}</div>
+                      <div className="font-medium">{user.total_bottles_submitted}</div>
                       <div className="text-sm text-muted-foreground">единиц</div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium text-blue-600">{formatCurrency(user.totalPayout)}</div>
+                      <div className="font-medium text-blue-600">{formatCurrency(user.total_payout)}</div>
                       <div className="text-sm text-muted-foreground">всего выплачено</div>
                     </TableCell>
                     <TableCell>
@@ -300,9 +363,13 @@ export default function UsersPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button variant="ghost" className="h-8 w-8 p-0" disabled={actionLoading[user.id]}>
                             <span className="sr-only">Открыть меню</span>
-                            <MoreHorizontal className="h-4 w-4" />
+                            {actionLoading[user.id] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MoreHorizontal className="h-4 w-4" />
+                            )}
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -316,15 +383,23 @@ export default function UsersPage() {
                             Редактировать
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {user.status === "active" ? (
-                            <DropdownMenuItem className="text-red-600">
+                          {user.is_active ? (
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => blockUser(user.id)}
+                              disabled={actionLoading[user.id]}
+                            >
                               <Ban className="mr-2 h-4 w-4" />
                               Заблокировать
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem className="text-green-600">
+                            <DropdownMenuItem
+                              className="text-green-600"
+                              onClick={() => unblockUser(user.id)}
+                              disabled={actionLoading[user.id]}
+                            >
                               <CheckCircle className="mr-2 h-4 w-4" />
-                              Активировать
+                              Разблокировать
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -336,7 +411,6 @@ export default function UsersPage() {
             </Table>
           </div>
 
-          {/* Pagination */}
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-muted-foreground">
               Показано {filteredUsers.length} из {users.length} пользователей

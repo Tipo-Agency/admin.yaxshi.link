@@ -1,11 +1,18 @@
 "use client"
 import { useParams, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
 import {
   ArrowLeft,
   MapPin,
@@ -21,98 +28,13 @@ import {
   Wrench,
   BarChart3,
   Coins,
+  Edit,
+  Loader2,
 } from "lucide-react"
-
-// Mock detailed data based on the database model
-const getFondomat = (id: string) => {
-  const fondomats = {
-    "FDM-001": {
-      id: "FDM-001",
-      name: "Фондомат Навои-12",
-      location: "ул. Навои, 12, Ташкент",
-      latitude: 41.2995,
-      longitude: 69.2401,
-      is_active: true,
-      status: "active",
-      model: "EcoBot Pro 500X",
-      software_version: "v2.1.4",
-      serial_number: "YL500X-2023-001",
-      installation_date: "2023-08-15T10:30:00Z",
-      last_maintenance: "2024-02-15T14:20:00Z",
-      collected_today: 45,
-      collected_week: 287,
-      collected_month: 1240,
-      collected_total: 12450,
-      avg_collected_per_day: 42,
-      peak_hour_start: "18:00",
-      peak_hour_end: "19:00",
-      min_activity_hour_start: "03:00",
-      min_activity_hour_end: "04:00",
-      points_issued: 24900,
-      capacity: 500,
-      currentLoad: 387,
-      revenue: 24900,
-      issues: [],
-    },
-    "FDM-002": {
-      id: "FDM-002",
-      name: "Фондомат Амир Темур-45",
-      location: "пр. Амир Темур, 45, Ташкент",
-      latitude: 41.3111,
-      longitude: 69.2797,
-      is_active: true,
-      status: "maintenance",
-      model: "EcoBot Pro 500X",
-      software_version: "v2.1.3",
-      serial_number: "YL500X-2023-002",
-      installation_date: "2023-09-20T09:15:00Z",
-      last_maintenance: "2024-01-28T11:45:00Z",
-      collected_today: 23,
-      collected_week: 156,
-      collected_month: 720,
-      collected_total: 8920,
-      avg_collected_per_day: 35,
-      peak_hour_start: "17:30",
-      peak_hour_end: "18:30",
-      min_activity_hour_start: "02:30",
-      min_activity_hour_end: "03:30",
-      points_issued: 17840,
-      capacity: 500,
-      currentLoad: 456,
-      revenue: 17840,
-      issues: ["Заполнен на 91%", "Требуется очистка"],
-    },
-    "FDM-003": {
-      id: "FDM-003",
-      name: "Фондомат Мустакиллик-78",
-      location: "ул. Мустакиллик, 78, Ташкент",
-      latitude: 41.2856,
-      longitude: 69.2034,
-      is_active: false,
-      status: "offline",
-      model: "EcoBot Lite 300S",
-      software_version: "v1.9.2",
-      serial_number: "YL300S-2023-003",
-      installation_date: "2023-10-05T13:20:00Z",
-      last_maintenance: "2024-02-10T16:30:00Z",
-      collected_today: 0,
-      collected_week: 0,
-      collected_month: 234,
-      collected_total: 5670,
-      avg_collected_per_day: 28,
-      peak_hour_start: "19:00",
-      peak_hour_end: "20:00",
-      min_activity_hour_start: "04:00",
-      min_activity_hour_end: "05:00",
-      points_issued: 11340,
-      capacity: 300,
-      currentLoad: 234,
-      revenue: 11340,
-      issues: ["Нет связи", "Возможна поломка"],
-    },
-  }
-  return fondomats[id as keyof typeof fondomats] || null
-}
+import { getFondomat } from "@/lib/api/fandomats"
+import { fandomatsApi } from "@/lib/api/fandomats"
+import { ApiError } from "@/lib/api/client"
+import type { DetailedFondomat } from "@/lib/api/types"
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -142,36 +64,197 @@ const getStatusBadge = (status: string) => {
   }
 }
 
-const getLoadPercentage = (current: number, capacity: number) => {
-  return Math.round((current / capacity) * 100)
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("uz-UZ", {
+    style: "currency",
+    currency: "UZS",
+    minimumFractionDigits: 0,
+  }).format(amount)
 }
 
-const getLoadColor = (percentage: number) => {
-  if (percentage >= 90) return "text-red-600"
-  if (percentage >= 70) return "text-yellow-600"
-  return "text-green-600"
-}
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) {
+    return "Не указано"
+  }
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("ru-RU", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  try {
+    return new Date(dateString).toLocaleDateString("ru-RU", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  } catch (error) {
+    return "Неверный формат даты"
+  }
 }
 
 export default function FondomatDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const fondomat = getFondomat(params.id as string)
+  const [fondomat, setFondomat] = useState<DetailedFondomat | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!fondomat) {
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [loadingDetailedFondomat, setLoadingDetailedFondomat] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    location: "",
+    latitude: "",
+    longitude: "",
+    model: "",
+    software_version: "",
+    serial_number: "",
+    is_active: true,
+    status: "active",
+  })
+  const { toast } = useToast()
+
+  useEffect(() => {
+    const loadFondomat = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await getFondomat(Number(params.id))
+        setFondomat(data)
+      } catch (err) {
+        console.error("Error loading fondomat:", err)
+        setError("Ошибка при загрузке данных фондомата")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (params.id) {
+      loadFondomat()
+    }
+  }, [params.id])
+
+  const handleEditFondomat = async () => {
+    if (!fondomat) return
+
+    setLoadingDetailedFondomat(true)
+    setIsEditDialogOpen(true)
+
+    try {
+      const detailedFondomat = await getFondomat(fondomat.id)
+
+      setEditFormData({
+        name: detailedFondomat.name,
+        location: detailedFondomat.location,
+        latitude: detailedFondomat.latitude,
+        longitude: detailedFondomat.longitude,
+        model: detailedFondomat.model || "",
+        software_version: detailedFondomat.software_version || "",
+        serial_number: detailedFondomat.serial_number || "",
+        is_active: detailedFondomat.is_active,
+        status: detailedFondomat.status,
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Ошибка загрузки данных фондомата"
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      setEditFormData({
+        name: fondomat.name,
+        location: fondomat.location,
+        latitude: fondomat.latitude,
+        longitude: fondomat.longitude,
+        model: fondomat.model || "",
+        software_version: fondomat.software_version || "",
+        serial_number: fondomat.serial_number || "",
+        is_active: fondomat.is_active,
+        status: fondomat.status,
+      })
+    } finally {
+      setLoadingDetailedFondomat(false)
+    }
+  }
+
+  const handleUpdateFondomat = async () => {
+    if (!fondomat) return
+
+    if (!editFormData.name || !editFormData.location || !editFormData.latitude || !editFormData.longitude) {
+      toast({
+        title: "Ошибка",
+        description: "Пожалуйста, заполните все обязательные поля",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsEditing(true)
+      const updatedFondomat = await fandomatsApi.updateFondomat(fondomat.id, {
+        name: editFormData.name,
+        location: editFormData.location,
+        latitude: Number.parseFloat(editFormData.latitude),
+        longitude: Number.parseFloat(editFormData.longitude),
+        is_active: editFormData.is_active,
+        status: editFormData.status,
+        ...(editFormData.model && { model: editFormData.model }),
+        ...(editFormData.software_version && { software_version: editFormData.software_version }),
+        ...(editFormData.serial_number && { serial_number: editFormData.serial_number }),
+      })
+
+      setFondomat((prev) => (prev ? { ...prev, ...updatedFondomat } : null))
+
+      setIsEditDialogOpen(false)
+
+      toast({
+        title: "Успешно",
+        description: "Фондомат успешно обновлен",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Ошибка обновления фондомата"
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsEditing(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-20" />
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-2 w-full mb-2" />
+                <Skeleton className="h-3 w-20" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !fondomat) {
     return (
       <div className="p-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-4">Фондомат не найден</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-4">{error || "Фондомат не найден"}</h1>
           <Button onClick={() => router.back()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Назад
@@ -181,7 +264,13 @@ export default function FondomatDetailPage() {
     )
   }
 
-  const loadPercentage = getLoadPercentage(fondomat.currentLoad, fondomat.capacity)
+  const loadPercentage = fondomat.capacity ? Math.round((fondomat.collected_today / fondomat.capacity) * 100) : 0
+
+  const getLoadColor = (percentage: number) => {
+    if (percentage >= 90) return "text-red-600"
+    if (percentage >= 70) return "text-yellow-600"
+    return "text-green-600"
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -202,6 +291,10 @@ export default function FondomatDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           {getStatusBadge(fondomat.status)}
+          <Button variant="outline" onClick={handleEditFondomat}>
+            <Edit className="w-4 h-4 mr-2" />
+            Редактировать
+          </Button>
           <Button>
             <Settings className="w-4 h-4 mr-2" />
             Настройки
@@ -222,7 +315,7 @@ export default function FondomatDetailPage() {
             </div>
             <Progress value={loadPercentage} className="h-2 mb-2" />
             <p className="text-xs text-muted-foreground">
-              {fondomat.currentLoad} из {fondomat.capacity} единиц
+              {fondomat.collected_today} из {fondomat.capacity || 500} единиц
             </p>
           </CardContent>
         </Card>
@@ -251,33 +344,29 @@ export default function FondomatDetailPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Баллы выдано</CardTitle>
+            <CardTitle className="text-sm font-medium">Общий доход</CardTitle>
             <Coins className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{fondomat.points_issued.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">баллов пользователям</p>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(Number(fondomat.total_income))}</div>
+            <p className="text-xs text-muted-foreground">узбекских сум</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Issues Alert */}
-      {fondomat.issues.length > 0 && (
+      {/* Issues Alert - показываем если статус не активный */}
+      {fondomat.status !== "active" && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardHeader>
             <CardTitle className="text-yellow-800 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
-              Требует внимания ({fondomat.issues.length})
+              Требует внимания
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-1">
-              {fondomat.issues.map((issue, index) => (
-                <li key={index} className="text-yellow-700 text-sm">
-                  • {issue}
-                </li>
-              ))}
-            </ul>
+            <p className="text-yellow-700 text-sm">
+              Фондомат находится в статусе: {fondomat.status === "maintenance" ? "На обслуживании" : "Не работает"}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -413,58 +502,25 @@ export default function FondomatDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Эффективность</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Время работы</span>
-                    <span>94%</span>
-                  </div>
-                  <Progress value={94} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Производительность</span>
-                    <span>87%</span>
-                  </div>
-                  <Progress value={87} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Надежность</span>
-                    <span>96%</span>
-                  </div>
-                  <Progress value={96} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="technical" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Техническая информация</CardTitle>
                 <CardDescription>Основные характеристики устройства</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm text-muted-foreground">Модель</span>
-                    <p className="font-medium">{fondomat.model}</p>
+                    <p className="font-medium">{fondomat.model || "Не указано"}</p>
                   </div>
                   <div>
                     <span className="text-sm text-muted-foreground">Серийный номер</span>
-                    <p className="font-medium">{fondomat.serial_number}</p>
+                    <p className="font-medium">{fondomat.serial_number || "Не указано"}</p>
                   </div>
                   <div>
                     <span className="text-sm text-muted-foreground">Версия ПО</span>
-                    <p className="font-medium">{fondomat.software_version}</p>
+                    <p className="font-medium">{fondomat.software_version || "Не указано"}</p>
                   </div>
                   <div>
                     <span className="text-sm text-muted-foreground">Вместимость</span>
-                    <p className="font-medium">{fondomat.capacity} единиц</p>
+                    <p className="font-medium">{fondomat.capacity || 500} единиц</p>
                   </div>
                 </div>
                 <Separator />
@@ -523,6 +579,7 @@ export default function FondomatDetailPage() {
                   <p className="font-medium">{formatDate(fondomat.last_maintenance)}</p>
                   <p className="text-sm text-muted-foreground">Плановое техническое обслуживание</p>
                 </div>
+
                 <Separator />
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -570,6 +627,116 @@ export default function FondomatDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Редактировать фондомат</DialogTitle>
+            <DialogDescription>Изменить информацию о фондомате</DialogDescription>
+          </DialogHeader>
+          {loadingDetailedFondomat ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Загрузка данных...</span>
+            </div>
+          ) : (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Название *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-location">Адрес *</Label>
+                <Input
+                  id="edit-location"
+                  value={editFormData.location}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-latitude">Широта *</Label>
+                  <Input
+                    id="edit-latitude"
+                    type="number"
+                    step="any"
+                    value={editFormData.latitude}
+                    onChange={(e) => setEditFormData((prev) => ({ ...prev, latitude: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-longitude">Долгота *</Label>
+                  <Input
+                    id="edit-longitude"
+                    type="number"
+                    step="any"
+                    value={editFormData.longitude}
+                    onChange={(e) => setEditFormData((prev) => ({ ...prev, longitude: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">Статус</Label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value) => setEditFormData((prev) => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Активный</SelectItem>
+                    <SelectItem value="maintenance">На обслуживании</SelectItem>
+                    <SelectItem value="inactive">Неактивный</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-model">Модель</Label>
+                <Input
+                  id="edit-model"
+                  value={editFormData.model}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, model: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-serial">Серийный номер</Label>
+                <Input
+                  id="edit-serial"
+                  value={editFormData.serial_number}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, serial_number: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-software">Версия ПО</Label>
+                <Input
+                  id="edit-software"
+                  value={editFormData.software_version}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, software_version: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={isEditing || loadingDetailedFondomat}
+            >
+              Отмена
+            </Button>
+            <Button onClick={handleUpdateFondomat} disabled={isEditing || loadingDetailedFondomat}>
+              {isEditing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditing ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

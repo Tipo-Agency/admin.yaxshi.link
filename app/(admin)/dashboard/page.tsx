@@ -1,9 +1,81 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Users, Award, Recycle, TrendingUp, Calendar, MapPin, AlertTriangle } from "lucide-react"
+import { useEffect, useState } from "react"
+import { getStats, type DashboardStats } from "@/lib/api/dashboard"
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true)
+        const data = await getStats()
+        setStats(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Ошибка загрузки данных")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
+  const formatCurrency = (amount: string) => {
+    const num = Number.parseFloat(amount)
+    return new Intl.NumberFormat("uz-UZ", {
+      style: "currency",
+      currency: "UZS",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+      .format(num)
+      .replace("UZS", "сум")
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Дашборд</h1>
+          <p className="text-muted-foreground">Обзор системы Yaxshi Link</p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500">Ошибка: {error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!stats) return null
+
   return (
     <div className="p-6 space-y-6">
       <div className="mb-6">
@@ -19,10 +91,10 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">2,847</div>
+            <div className="text-2xl font-bold text-primary">{stats.total_users.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3 text-green-500" />
-              +12% с прошлого месяца
+              Активные пользователи
             </p>
             <Progress value={75} className="mt-2" />
           </CardContent>
@@ -34,14 +106,12 @@ export default function DashboardPage() {
             <Recycle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">156</div>
+            <div className="text-2xl font-bold text-green-600">{stats.active_fandomats}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-green-500" />
-              +3 новых на этой неделе
+              <TrendingUp className="h-3 w-3 text-green-500" />В работе
             </p>
             <div className="flex justify-between text-xs mt-2">
-              <span>Работают: 142</span>
-              <span className="text-yellow-600">Обслуживание: 14</span>
+              <span>Работают: {stats.active_fandomats}</span>
             </div>
           </CardContent>
         </Card>
@@ -52,21 +122,17 @@ export default function DashboardPage() {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">8,924</div>
+            <div className="text-2xl font-bold text-yellow-600">{stats.total_issued_rewards.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3 text-green-500" />
-              +18% с прошлого месяца
+              Всего выдано
             </p>
             <div className="flex flex-wrap gap-1 mt-2">
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 whitespace-nowrap">
-                Наушники: 5,234
-              </Badge>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 whitespace-nowrap">
-                Телевизор: 2,890
-              </Badge>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 whitespace-nowrap">
-                Телефон: 800
-              </Badge>
+              {stats.rewards.slice(0, 3).map((reward) => (
+                <Badge key={reward.id} variant="secondary" className="text-[10px] px-1.5 py-0.5 whitespace-nowrap">
+                  {reward.name}: {reward.issued_total}
+                </Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -77,10 +143,10 @@ export default function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">₽124,580</div>
+            <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.total_income)}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3 text-green-500" />
-              +8% с прошлого месяца
+              Общий доход
             </p>
             <Progress value={68} className="mt-2" />
           </CardContent>
@@ -191,7 +257,7 @@ export default function DashboardPage() {
                 <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">Новый пользователь зарегистрирован</p>
-                  <p className="text-xs text-muted-foreground">ID: #2847 • Ташкент</p>
+                  <p className="text-xs text-muted-foreground">ID: #{stats.total_users} • Ташкент</p>
                   <p className="text-xs text-muted-foreground">2 минуты назад</p>
                 </div>
                 <Badge variant="outline" className="text-xs">
@@ -212,8 +278,8 @@ export default function DashboardPage() {
               <div className="flex items-start gap-4 p-3 rounded-lg bg-green-50">
                 <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Выдана золотая награда</p>
-                  <p className="text-xs text-muted-foreground">Пользователь #1247 • 500 единиц тары</p>
+                  <p className="text-sm font-medium">Выдана награда</p>
+                  <p className="text-xs text-muted-foreground">Пользователь • {stats.rewards[0]?.name || "Награда"}</p>
                   <p className="text-xs text-muted-foreground">1 час назад</p>
                 </div>
                 <Badge variant="secondary" className="text-xs bg-green-100">
@@ -289,7 +355,7 @@ export default function DashboardPage() {
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   <div>
                     <span className="text-sm font-medium">Мониторинг фондоматов</span>
-                    <p className="text-xs text-muted-foreground">Онлайн: 142/156</p>
+                    <p className="text-xs text-muted-foreground">Онлайн: {stats.active_fandomats}/156</p>
                   </div>
                 </div>
                 <Badge variant="secondary" className="bg-green-100 text-green-800">
