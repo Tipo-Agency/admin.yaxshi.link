@@ -100,6 +100,7 @@ export default function RewardsPage() {
     description: "",
     points_required: "",
     price_uzs: "",
+    quantity: "",
   })
   const [isCreating, setIsCreating] = useState(false)
 
@@ -110,6 +111,7 @@ export default function RewardsPage() {
     description: "",
     points_required: "",
     price_uzs: "",
+    quantity: "",
   })
   const [editSelectedImage, setEditSelectedImage] = useState<File | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -194,10 +196,10 @@ export default function RewardsPage() {
   }
 
   const handleCreateReward = async () => {
-    if (!createForm.name || !createForm.points_required || !createForm.price_uzs || !selectedImage) {
+    if (!createForm.name || !createForm.points_required || !createForm.price_uzs || !createForm.quantity || !selectedImage) {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, заполните все обязательные поля и выберите изображение",
+        description: "Пожалуйста, заполните все обязательные поля (включая количество) и выберите изображение",
         variant: "destructive",
       })
       return
@@ -210,6 +212,7 @@ export default function RewardsPage() {
         description: createForm.description || null,
         points_required: Number.parseInt(createForm.points_required),
         price_uzs: createForm.price_uzs,
+        quantity: Number.parseInt(createForm.quantity),
         image: selectedImage,
       })
 
@@ -218,7 +221,7 @@ export default function RewardsPage() {
       setStats((prev) => ({ ...prev, total_issued: prev.total_issued }))
 
       // Reset form
-      setCreateForm({ name: "", description: "", points_required: "", price_uzs: "" })
+      setCreateForm({ name: "", description: "", points_required: "", price_uzs: "", quantity: "" })
       setSelectedImage(null)
       setIsCreateDialogOpen(false)
 
@@ -245,6 +248,7 @@ export default function RewardsPage() {
       description: reward.description,
       points_required: reward.points_required.toString(),
       price_uzs: reward.price_uzs,
+      quantity: reward.quantity.toString(),
     })
     setEditSelectedImage(null)
     setIsEditDialogOpen(true)
@@ -258,10 +262,10 @@ export default function RewardsPage() {
   }
 
   const handleUpdateReward = async () => {
-    if (!editingReward || !editForm.name || !editForm.points_required || !editForm.price_uzs) {
+    if (!editingReward || !editForm.name || !editForm.points_required || !editForm.price_uzs || !editForm.quantity) {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, заполните все обязательные поля",
+        description: "Пожалуйста, заполните все обязательные поля (включая количество)",
         variant: "destructive",
       })
       return
@@ -274,6 +278,7 @@ export default function RewardsPage() {
         description: editForm.description || null,
         points_required: Number.parseInt(editForm.points_required),
         price_uzs: editForm.price_uzs,
+        quantity: Number.parseInt(editForm.quantity),
       }
 
       if (editSelectedImage) {
@@ -286,7 +291,7 @@ export default function RewardsPage() {
       setRewards((prev) => prev.map((reward) => (reward.id === editingReward.id ? updatedReward : reward)))
 
       // Reset form
-      setEditForm({ name: "", description: "", points_required: "", price_uzs: "" })
+      setEditForm({ name: "", description: "", points_required: "", price_uzs: "", quantity: "" })
       setEditSelectedImage(null)
       setEditingReward(null)
       setIsEditDialogOpen(false)
@@ -466,6 +471,16 @@ export default function RewardsPage() {
                   placeholder="1500000"
                   value={createForm.price_uzs}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, price_uzs: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="quantity">Количество</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  placeholder="10"
+                  value={createForm.quantity}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, quantity: e.target.value }))}
                 />
               </div>
               <div className="grid gap-2">
@@ -759,6 +774,16 @@ export default function RewardsPage() {
                 placeholder="1500000"
                 value={editForm.price_uzs}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, price_uzs: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-quantity">Количество</Label>
+              <Input
+                id="edit-quantity"
+                type="number"
+                placeholder="10"
+                value={editForm.quantity}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, quantity: e.target.value }))}
               />
             </div>
             <div className="grid gap-2">

@@ -29,6 +29,7 @@ export interface CreateRewardData {
   description: string | null
   points_required: number
   price_uzs: string
+  quantity: number
   image: File
 }
 
@@ -37,6 +38,7 @@ export interface UpdateRewardData {
   description?: string | null
   points_required?: number
   price_uzs?: string
+  quantity?: number
   image?: File
 }
 
@@ -51,6 +53,7 @@ export const rewardsApi = {
     formData.append("description", data.description || "")
     formData.append("points_required", data.points_required.toString())
     formData.append("price_uzs", data.price_uzs)
+    formData.append("quantity", data.quantity.toString())
     formData.append("image", data.image)
 
     try {
@@ -108,6 +111,7 @@ export const rewardsApi = {
     if (data.description !== undefined) formData.append("description", data.description || "")
     if (data.points_required !== undefined) formData.append("points_required", data.points_required.toString())
     if (data.price_uzs !== undefined) formData.append("price_uzs", data.price_uzs)
+    if (data.quantity !== undefined) formData.append("quantity", data.quantity.toString())
     if (data.image !== undefined) formData.append("image", data.image)
 
     try {
