@@ -20,6 +20,7 @@ const navigation = [
   { name: "Дашборд", href: "/dashboard", icon: LayoutDashboard },
   { name: "Пользователи", href: "/users", icon: Users },
   { name: "Награды", href: "/rewards", icon: Smartphone },
+  { name: "Вендоры", href: "/vendors", icon: Package },
   { name: "Фондоматы", href: "/fondomats", icon: Recycle },
   { name: "Панель управления", href: "/control", icon: Settings },
 ]
