@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -43,6 +44,8 @@ import {
   type Reward,
   type UpdateRewardData,
 } from "@/lib/api/rewards"
+import { vendorsApi } from "@/lib/api/vendors"
+import type { TVendor } from "@/lib/api/vendors"
 import { useToast } from "@/hooks/use-toast"
 
 const getRewardIcon = (name: string) => {
@@ -85,6 +88,9 @@ export default function RewardsPage() {
   const [stats, setStats] = useState<{ total_issued: number }>({ total_issued: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [vendorNames, setVendorNames] = useState<Record<number, string>>({})
+  const [vendors, setVendors] = useState<TVendor[]>([])
+  const [selectedVendorFilter, setSelectedVendorFilter] = useState<string>("all")
 
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -136,7 +142,49 @@ export default function RewardsPage() {
     loadRewards()
   }, [toast])
 
-  const filteredRewards = rewards.filter((reward) => reward.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  useEffect(() => {
+    const loadVendors = async () => {
+      try {
+        const list = await vendorsApi.list()
+        setVendors(list)
+      } catch (e) {
+        // ignore vendor list errors in UI
+      }
+    }
+    loadVendors()
+  }, [])
+
+  useEffect(() => {
+    const fetchVendors = async () => {
+      const uniqueVendorIds = Array.from(new Set(rewards.map((r) => r.vendor_id)))
+      const idsToFetch = uniqueVendorIds.filter((id) => vendorNames[id] === undefined)
+      if (idsToFetch.length === 0) return
+
+      try {
+        const entries = await Promise.all(
+          idsToFetch.map(async (id) => {
+            try {
+              const vendor = await vendorsApi.get(id)
+              return [id, vendor.name] as const
+            } catch (e) {
+              return [id, `Поставщик #${id}`] as const
+            }
+          }),
+        )
+        setVendorNames((prev) => ({ ...prev, ...Object.fromEntries(entries) }))
+      } catch (e) {
+        // ignore batch errors; names will fallback
+      }
+    }
+
+    if (rewards.length > 0) {
+      fetchVendors()
+    }
+  }, [rewards, vendorNames])
+
+  const filteredRewards = rewards
+    .filter((reward) => reward.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter((reward) => selectedVendorFilter === "all" || reward.vendor_id === Number(selectedVendorFilter))
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -355,13 +403,28 @@ export default function RewardsPage() {
           <h1 className="text-3xl font-bold text-foreground">Награды</h1>
           <p className="text-muted-foreground">Управление призовой техникой и выдачей пользователям</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Добавить награду
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Select value={selectedVendorFilter} onValueChange={setSelectedVendorFilter}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Фильтр по поставщику" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все поставщики</SelectItem>
+              {vendors.map((v) => (
+                <SelectItem key={v.id} value={String(v.id)}>
+                  {v.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4 mr-2" />
+                Добавить награду
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Добавить новую награду</DialogTitle>
@@ -436,7 +499,8 @@ export default function RewardsPage() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -497,7 +561,7 @@ export default function RewardsPage() {
 
         <TabsContent value="types" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {rewards.map((reward) => {
+            {filteredRewards.map((reward) => {
               const IconComponent = getRewardIcon(reward.name)
               const colors = getRewardColor(reward.name)
               const isDeleting = deletingRewards.has(reward.id)
@@ -524,6 +588,9 @@ export default function RewardsPage() {
                           <CardTitle className="text-lg">{reward.name}</CardTitle>
                           <CardDescription>{reward.description}</CardDescription>
                           <p className="text-sm font-medium text-primary mt-1">{formatCurrency(reward.price_uzs)}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Поставщик: <span className="font-medium text-foreground">{vendorNames[reward.vendor_id] ?? "Загрузка..."}</span>
+                          </p>
                         </div>
                       </div>
                       <DropdownMenu>
@@ -556,6 +623,10 @@ export default function RewardsPage() {
                         <span className="font-medium">{reward.points_required} баллов</span>
                       </div>
                       <div className="flex justify-between text-sm">
+                        <span>Количество:</span>
+                        <span className="font-medium">{reward.quantity?.toLocaleString?.() ?? reward.quantity}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
                         <span>Выдано всего:</span>
                         <span className="font-medium">{reward.issued_total.toLocaleString()}</span>
                       </div>
@@ -583,15 +654,19 @@ export default function RewardsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {rewards.map((reward) => {
+                  {filteredRewards.map((reward) => {
                     const IconComponent = getRewardIcon(reward.name)
-                    const percentage = stats.total_issued > 0 ? (reward.issued_total / stats.total_issued) * 100 : 0
+                    const totalIssuedFiltered = filteredRewards.reduce((acc, r) => acc + r.issued_total, 0)
+                    const percentage = totalIssuedFiltered > 0 ? (reward.issued_total / totalIssuedFiltered) * 100 : 0
                     return (
                       <div key={reward.id} className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="flex items-center gap-2">
                             <IconComponent className="h-4 w-4" />
-                            {reward.name}
+                            <span>
+                              {reward.name}
+                              <span className="text-muted-foreground"> · {vendorNames[reward.vendor_id] ?? `Поставщик #${reward.vendor_id}`}</span>
+                            </span>
                           </span>
                           <span className="font-medium">{reward.issued_total.toLocaleString()}</span>
                         </div>
@@ -613,7 +688,7 @@ export default function RewardsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {rewards
+                  {filteredRewards
                     .sort((a, b) => b.popularity - a.popularity)
                     .map((reward, index) => {
                       const IconComponent = getRewardIcon(reward.name)
@@ -625,7 +700,10 @@ export default function RewardsPage() {
                           <IconComponent className="h-4 w-4 text-muted-foreground" />
                           <div className="flex-1">
                             <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium">{reward.name}</span>
+                              <span className="text-sm font-medium">
+                                {reward.name}
+                                <span className="ml-1 text-xs text-muted-foreground">({vendorNames[reward.vendor_id] ?? `Поставщик #${reward.vendor_id}`})</span>
+                              </span>
                               <span className="text-sm text-muted-foreground">{reward.popularity}%</span>
                             </div>
                           </div>

@@ -1,13 +1,14 @@
 import { apiClient } from "./client"
-import type { File } from "form-data"
 
 export interface Reward {
   id: number
+  vendor_id: number
   name: string
   description: string
   image: string
   points_required: number
   price_uzs: string
+  quantity: number
   issued_total: number
   popularity: number
   created_at: string
