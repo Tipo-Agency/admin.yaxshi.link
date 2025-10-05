@@ -30,11 +30,15 @@ import {
   Coins,
   Edit,
   Loader2,
+  QrCode,
+  RefreshCw,
+  Download,
 } from "lucide-react"
 import { getFondomat } from "@/lib/api/fandomats"
 import { fandomatsApi } from "@/lib/api/fandomats"
 import { ApiError } from "@/lib/api/client"
 import type { DetailedFondomat } from "@/lib/api/types"
+import { API_BASE_URL } from "@/lib/api/config"
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -100,6 +104,8 @@ export default function FondomatDetailPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [loadingDetailedFondomat, setLoadingDetailedFondomat] = useState(false)
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false)
+  const [qrCodeTimestamp, setQrCodeTimestamp] = useState(Date.now())
   const [editFormData, setEditFormData] = useState({
     name: "",
     location: "",
@@ -219,6 +225,67 @@ export default function FondomatDetailPage() {
       })
     } finally {
       setIsEditing(false)
+    }
+  }
+
+  const handleGenerateQRCode = async () => {
+    if (!fondomat) return
+
+    try {
+      setIsGeneratingQR(true)
+      const response = await fandomatsApi.generateQRCode(fondomat.id)
+      
+      setFondomat((prev) => (prev ? { ...prev, qr_code: response.qr_code } : null))
+      // Обновляем timestamp чтобы обойти кэш браузера и изображение обновилось
+      setQrCodeTimestamp(Date.now())
+
+      toast({
+        title: "Успешно",
+        description: "QR-код успешно сгенерирован",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError ? err.message : "Ошибка генерации QR-кода"
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingQR(false)
+    }
+  }
+
+  const handleDownloadQRCode = async () => {
+    if (!fondomat?.qr_code) return
+
+    try {
+      const qrCodeUrl = (API_BASE_URL.endsWith("/")
+        ? API_BASE_URL + (fondomat.qr_code?.startsWith("/") ? fondomat.qr_code.slice(1) : fondomat.qr_code)
+        : API_BASE_URL + (fondomat.qr_code?.startsWith("/") ? fondomat.qr_code : "/" + fondomat.qr_code)) +
+        `?t=${qrCodeTimestamp}`
+
+      const response = await fetch(qrCodeUrl)
+      const blob = await response.blob()
+      
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `fondomat-${fondomat.id}-qr-code.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: "Успешно",
+        description: "QR-код успешно скачан",
+      })
+    } catch (err) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скачать QR-код",
+        variant: "destructive",
+      })
     }
   }
 
@@ -447,6 +514,121 @@ export default function FondomatDetailPage() {
           </div>
         </TabsContent>
 
+        <TabsContent value="technical" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>QR-код фондомата</CardTitle>
+                <CardDescription>Используется для идентификации устройства</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {fondomat.qr_code ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="border rounded-lg p-4 bg-white">
+                      <img 
+                        src={
+                          (API_BASE_URL.endsWith("/")
+                            ? API_BASE_URL + (fondomat.qr_code?.startsWith("/") ? fondomat.qr_code.slice(1) : fondomat.qr_code)
+                            : API_BASE_URL + (fondomat.qr_code?.startsWith("/") ? fondomat.qr_code : "/" + fondomat.qr_code)) +
+                          `?t=${qrCodeTimestamp}`
+                        }
+                        alt="QR-код фондомата" 
+                        className="w-48 h-48 object-contain"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <Button 
+                        variant="outline" 
+                        onClick={handleGenerateQRCode}
+                        disabled={isGeneratingQR}
+                      >
+                        {isGeneratingQR ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Генерация...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Сгенерировать
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        onClick={handleDownloadQRCode}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Скачать
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center space-y-4 py-8">
+                    <div className="w-48 h-48 bg-muted rounded-lg flex items-center justify-center">
+                      <QrCode className="w-16 h-16 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground text-center">QR-код не создан</p>
+                    <Button 
+                      onClick={handleGenerateQRCode}
+                      disabled={isGeneratingQR}
+                      className="w-full"
+                    >
+                      {isGeneratingQR ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Генерация...
+                        </>
+                      ) : (
+                        <>
+                          <QrCode className="w-4 h-4 mr-2" />
+                          Сгенерировать QR-код
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Техническая информация</CardTitle>
+                <CardDescription>Основные характеристики устройства</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm text-muted-foreground">Модель</span>
+                    <p className="font-medium">{fondomat.model || "Не указано"}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Серийный номер</span>
+                    <p className="font-medium">{fondomat.serial_number || "Не указано"}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Версия ПО</span>
+                    <p className="font-medium">{fondomat.software_version || "Не указано"}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Вместимость</span>
+                    <p className="font-medium">{fondomat.capacity || 500} единиц</p>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <span className="text-sm text-muted-foreground">Дата установки</span>
+                  <p className="font-medium">{formatDate(fondomat.installation_date)}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">ID устройства</span>
+                  <p className="font-medium">#{fondomat.id}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         <TabsContent value="statistics" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -495,38 +677,6 @@ export default function FondomatDetailPage() {
                       </div>
                     )
                   })}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Эффективность</CardTitle>
-                <CardDescription>Основные характеристики устройства</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm text-muted-foreground">Модель</span>
-                    <p className="font-medium">{fondomat.model || "Не указано"}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Серийный номер</span>
-                    <p className="font-medium">{fondomat.serial_number || "Не указано"}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Версия ПО</span>
-                    <p className="font-medium">{fondomat.software_version || "Не указано"}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Вместимость</span>
-                    <p className="font-medium">{fondomat.capacity || 500} единиц</p>
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <span className="text-sm text-muted-foreground">Дата установки</span>
-                  <p className="font-medium">{formatDate(fondomat.installation_date)}</p>
                 </div>
               </CardContent>
             </Card>

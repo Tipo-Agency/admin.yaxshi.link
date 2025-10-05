@@ -48,6 +48,7 @@ export interface Fondomat {
   collected_total: number
   total_income: string
   created_at: string
+  qr_code?: string
 }
 
 export interface FondomatsStats {
@@ -79,6 +80,7 @@ export interface DetailedFondomat extends Fondomat {
   min_activity_hour_end: string
   points_issued: number
   capacity?: number
+  qr_code?: string
 }
 
 export interface ApiErrorResponse {

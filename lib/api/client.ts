@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config"
+import { API_URL } from "./config"
 
 export class ApiError extends Error {
   status?: number
@@ -77,4 +77,4 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient(API_BASE_URL)
+export const apiClient = new ApiClient(API_URL)

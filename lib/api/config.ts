@@ -1,4 +1,9 @@
-export const API_BASE_URL = "https://api.yaxshi.link/admin/api/v1"
+export const API_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:8000"
+    : "https://api.yaxshi.link"
+
+export const API_URL = `${API_BASE_URL}/admin/api/v1`
 
 export const API_ENDPOINTS = {
   USERS: {

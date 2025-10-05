@@ -11,6 +11,7 @@ export interface Fondomat {
   collected_total: number
   total_income: string
   created_at: string
+  qr_code?: string
 }
 
 export interface FondomatsStats {
@@ -66,6 +67,7 @@ export interface DetailedFondomat extends Fondomat {
   min_activity_hour_end: string
   points_issued: number
   capacity?: number
+  qr_code?: string
 }
 
 export const fandomatsApi = {
@@ -90,6 +92,11 @@ export const fandomatsApi = {
   deleteFondomat: async (id: number): Promise<void> => {
     return apiClient.delete(`/fandomats/${id}`)
   },
+
+  // Generate new QR code for fondomat
+  generateQRCode: async (id: number): Promise<{ qr_code: string }> => {
+    return apiClient.post<{ qr_code: string }>(`/fandomats/${id}/regenerate-qr`)
+  },
 }
 
 export const getFandomats = fandomatsApi.getFandomats
@@ -97,3 +104,4 @@ export const getFondomat = fandomatsApi.getFondomat
 export const createFondomat = fandomatsApi.createFondomat
 export const updateFondomat = fandomatsApi.updateFondomat
 export const deleteFondomat = fandomatsApi.deleteFondomat
+export const generateQRCode = fandomatsApi.generateQRCode

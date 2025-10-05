@@ -47,6 +47,7 @@ import {
 import { vendorsApi } from "@/lib/api/vendors"
 import type { TVendor } from "@/lib/api/vendors"
 import { useToast } from "@/hooks/use-toast"
+import { API_BASE_URL } from "@/lib/api/config"
 
 const getRewardIcon = (name: string) => {
   const lowerName = name.toLowerCase()
@@ -589,7 +590,7 @@ export default function RewardsPage() {
                           <img
                             src={
                               reward.image
-                                ? `https://api.yaxshi.link${reward.image}`
+                                ? `${API_BASE_URL}${reward.image}`
                                 : "/placeholder.svg?height=64&width=64"
                             }
                             alt={reward.name}
