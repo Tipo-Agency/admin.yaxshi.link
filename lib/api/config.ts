@@ -18,6 +18,13 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/vendors/${id}`,
     RESET_PASSWORD: (id: number) => `/vendors/${id}/reset-password`,
   },
+  BOTTLES: {
+    LIST: "/bottles/",
+    DETAIL: (id: number) => `/bottles/${id}`,
+    CREATE: "/bottles/",
+    UPDATE: (id: number) => `/bottles/${id}`,
+    DELETE: (id: number) => `/bottles/${id}`,
+  },
   AUTH: {
     LOGIN: "/auth/login",
     LOGOUT: "/auth/logout",

@@ -14,6 +14,7 @@ import {
   Package,
   ChevronLeft,
   ChevronRight,
+  Wine,
 } from "lucide-react"
 
 const navigation = [
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Пользователи", href: "/users", icon: Users },
   { name: "Награды", href: "/rewards", icon: Smartphone },
   { name: "Вендоры", href: "/vendors", icon: Package },
+  { name: "Бутылки", href: "/bottles", icon: Wine },
   { name: "Фондоматы", href: "/fondomats", icon: Recycle },
   { name: "Панель управления", href: "/control", icon: Settings },
 ]
